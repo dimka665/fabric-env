@@ -18,6 +18,7 @@ from fabric_env.path import Path
 
 # def environment(*args, **kwargs):
 #     return Environment.current(*args, **kwargs)
+import os
 
 
 class Environment(object):
@@ -88,7 +89,7 @@ class Environment(object):
         root.log.nginx = 'nginx.log'
         root.log.uwsgi = 'uwsgi.log'
 
-        root.pip_cache = '~/.pip-cache'
+        root.pip_cache = os.path.expanduser('~/.pip-cache')
         root.temp = '/tmp'
 
         root.src = 'src'

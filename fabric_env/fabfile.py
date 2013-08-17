@@ -26,15 +26,24 @@ def force():
 
 
 @task
-def env():
+def venv():
     """env [init/delete]"""
-    environment.env = True
+    environment.venv = True
 
 
 @task
 def nocache():
     """nocache [install]"""
     environment.cache = False
+
+
+@task
+def editable():
+    """
+    editable [install]
+    """
+    environment.editable = True
+
 
 @task
 def nginx():
@@ -134,15 +143,6 @@ def activate():
 # todo когда устанавливаем новое окружение то пакеты устанавливают старые зависимости, а нам нужны новые версии
 # todo например, django-lfs устанавливает старый django-compressor==1.1.1 Нам нужен ==1.2
 @task
-def editable():
-    """
-    editable [install]
-    """
-    environment.editable = True
-
-
-@task
-# def install(params='', **packages):
 def install(*packages, **kw_packages):
     """
     pip install
@@ -151,11 +151,11 @@ def install(*packages, **kw_packages):
     if environment.force:
         params += ' --force-reinstall'
 
+    if environment.editable:
+        packages = ' --editable'
+
     if environment.cache:
         params += ' --download-cache=' + environment.root.pip_cache
-
-    # if environment.pip_editable:
-    #     packages = ' --editable=' + packages + ' --src={root.src}'
 
     for package in packages:
         environment.env('pip install {package} {params}', package=package, params=params)
@@ -284,6 +284,15 @@ def hg_addremove():
             environment.success('hg addremove SUCCESS')
         else:
             environment.error('hg addremove FAIL')
+
+
+# --- setuptools ---
+@task
+def upload():
+    """
+    setup.py sdist upload
+    """
+    environment('python setup.py sdist upload')
 
 
 # --- Deploy ---
