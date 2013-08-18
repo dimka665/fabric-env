@@ -12,6 +12,7 @@ from fabric_env.utils import Environment, split_requirements
 from fabric_env.utils import environment
 import os
 
+from fabric.api import env    # for import from upper fabfile
 
 from fabric.decorators import task as f_task
 from fabric_env.utils import task

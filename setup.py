@@ -3,7 +3,7 @@ import os
 
 name = 'fabric-env'
 package = 'fabric_env'
-version = '0.5.2'
+version = '0.5.3'
 
 url = 'https://github.com/dimka665/fabric_env'
 author = 'Dmitry Voronin'
