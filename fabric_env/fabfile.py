@@ -152,7 +152,7 @@ def install(*packages, **kw_packages):
         params += ' --force-reinstall'
 
     if environment.editable:
-        packages = ' --editable'
+        params += ' --editable'
 
     if environment.cache:
         params += ' --download-cache=' + environment.root.pip_cache
