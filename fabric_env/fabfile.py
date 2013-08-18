@@ -9,10 +9,9 @@ from fabric.context_managers import settings
 from fabric.api import prompt
 from fabric_env.path import Path
 from fabric_env.utils import Environment, split_requirements
-from fabric_env.utils import envi
+from fabric_env.utils import environment
 import os
 
-environment = envi
 
 from fabric.decorators import task as f_task
 from fabric_env.utils import task
@@ -354,7 +353,7 @@ def pull():
 
 
 def hg_pull():
-    if environment('hg pull {hg_server}').succeeded:
+    if environment('hg pull {hg_path}').succeeded:
         environment.success('hg pull SUCCESS')
     else:
         environment.error('hg pull FAIL')
@@ -381,14 +380,14 @@ def update(branch=''):
 
 
 def hg_push():
-    if environment('hg push {hg_server}'):
+    if environment('hg push {hg_path}'):
         environment.success('Pushed')
     else:
         environment.error('Push failed')
 
 
 def git_push():
-    if environment('git-push {git_server}'):
+    if environment('git-push {git_path}'):
         environment.error('Pushed')
     else:
         environment.success('Push failed')
@@ -451,7 +450,7 @@ def migrate(app_name):
 
 def hg_commit(message=''):
     if not message:
-        message = prompt('Commit message: ')
+        message = environment.prompt('Commit message:')
 
     if message:
         if environment('hg commit -m "{message}"', message=message).succeeded:

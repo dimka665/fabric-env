@@ -34,8 +34,8 @@ class Environment(object):
     force = False # pip --force-reinstall
     cache = True   # pip --download-cache
 
-    hg_server = ''
-    git_server = ''
+    hg_path = ''
+    git_path = ''
 
     # def __new__(cls, *args, **kwargs):
     #     if not args:
@@ -43,7 +43,7 @@ class Environment(object):
 
     @property
     def hg(self):
-        return self._hg or (not self._git and self.hg_server)
+        return self._hg or (not self._git and self.hg_path)
 
     @hg.setter
     def hg(self, value):
@@ -51,7 +51,7 @@ class Environment(object):
 
     @property
     def git(self):
-        return self._git or (not self._hg and self.git_server)
+        return self._git or (not self._hg and self.git_path)
 
     @git.setter
     def git(self, value):
@@ -69,8 +69,8 @@ class Environment(object):
         self.platform = 'linux2'
 
         # repos
-        self.hg_server = ''
-        self.git_server = ''
+        self.hg_path = ''
+        self.git_path = ''
 
     def init_root(self, root):
         root = Path(root)
@@ -189,9 +189,12 @@ class Environment(object):
     def error(self, message):
         print('  ' + red(message))
 
+    @formatting
+    def prompt(self, message):
+        return fabric.api.prompt(cyan('  ' + message))    # spaces inside cyan to cancel trim
 
 
-envi = Environment('default_id')
+environment = Environment('default_id')
 
 class Package():
     pass
