@@ -23,8 +23,10 @@ import os
 
 class Environment(object):
     # ещё в нём храним состояния
+    # tags
     remote = False
     editable = False
+    package = False
 
     _hg = False
     _git = False
@@ -37,13 +39,17 @@ class Environment(object):
     hg_path = ''
     git_path = ''
 
-    # def __new__(cls, *args, **kwargs):
-    #     if not args:
-    #         return
+    # settings
+    pip_cache = '~/.pip-cache'
+    stable_branch = 'default'
+
+    # utils
+    packages = {}
 
     @property
     def hg(self):
         return self._hg or (not self._git and self.hg_path)
+        self('hg status', capture)
 
     @hg.setter
     def hg(self, value):
@@ -57,10 +63,10 @@ class Environment(object):
     def git(self, value):
         self._git = value
 
-    def __init__(self, id_, root='.', remote_root='.', name='name'):
+    def __init__(self, name, root='.', remote_root='.'):
         self.__dict__['_options'] = {}
 
-        self.id = id_
+        self.id = name
         self.name = name
 
         self.local_root = self.init_root(root)
@@ -89,10 +95,10 @@ class Environment(object):
         root.log.nginx = 'nginx.log'
         root.log.uwsgi = 'uwsgi.log'
 
-        root.pip_cache = os.path.expanduser('~/.pip-cache')
-        root.temp = '/tmp'
+        # root.pip_cache = os.path.expanduser('~/.pip-cache')
+        # root.temp = '/tmp'
+        # root.src = 'src'
 
-        root.src = 'src'
         return root
 
     @property
@@ -113,31 +119,23 @@ class Environment(object):
         return template.format(*args, **self_dict)
 
     def __call__(self, command=None, *args, **kwargs):
-        # without command switch environment
-        if not command:
-            Environment.current = self
-            return None
-
-        # command = self.format(command, *args, **kwargs.get('format_kwargs', {}))
         command = self.format(command, *args, **kwargs)
-
         self.info(command)
 
         if self.remote:
             with fabric.context_managers.cd(self.root):
-                # return fabric.api.run(command, *args, **kwargs)
-                # return fabric.api.run(command, **kwargs)
                 return fabric.api.run(command)
         else:
             with fabric.context_managers.lcd(self.root):
-                # return fabric.api.local(command, *args, **kwargs)
-                # return fabric.api.local(command, **kwargs)
-                return fabric.api.local(command)
+                return fabric.api.local(command, capture=True)
+
+    # def capture(self):
+    #     pass
 
     @contextmanager
     def virtualenv(self):
-        path = self.remote_root.env if self.remote else self.root.env
-
+        # path = self.remote_root.env if self.remote else self.root.env
+        path = self.root.env
         if self.platform == 'win32':
             prefix_command = path + 'scripts/activate'
         else:
@@ -164,37 +162,44 @@ class Environment(object):
             prefix_command = '. {}'.format(self.root.env + 'bin/activate')
         return prefix_command
 
-    def confirm(self, query='Sure?'):
-        query = self.format(query) + " ('yes' to confirm)"
-        return fabric.api.prompt(cyan(query)) == 'yes'
-
-    def info(self, message):
-        # print('  ' + cyan(message))
-        print('  ' + blue(message))
-
-    # @staticmethod
-    def formatting(function):
+    def add_format(function):
         def wrapped(self, template, *args, **kwargs):
             message = self.format(template, *args, **kwargs)
             return function(self, message)
         return wrapped
 
-    @formatting
+    @add_format
+    def confirm(self, message='Sure?'):
+        return fabric.api.prompt(cyan('  ' + message + " ('yes' to confirm)")) == 'yes'
+
+    @add_format
+    def info(self, message):
+        print('  ' + cyan(message))
+
+    @add_format
     def success(self, message):
         print('  ' + green(message))
 
+    @add_format
     def warning(self, message):
         print('  ' + yellow(message))
 
+    @add_format
     def error(self, message):
         print('  ' + red(message))
 
-    @formatting
+    @add_format
     def prompt(self, message):
         return fabric.api.prompt(cyan('  ' + message))    # spaces inside cyan to cancel trim
 
+    @classmethod
+    def add_package(cls, package):
+        if isinstance(package, cls):
+            print('is instance == true')
+            cls.packages[package.name] = package
 
-environment = Environment('default_id')
+
+# environment = Environment('default_id')
 
 class Package():
     pass

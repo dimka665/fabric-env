@@ -1,22 +1,21 @@
 # coding=utf8
 
+import os
 import shutil
-# from fabric.operations import local
+
+import fabric
 from fabric.context_managers import settings
-
-# import fabric
-
 from fabric.api import prompt
+from fabric.api import env    # for import from upper fabfile
+from fabric.decorators import task as f_task
+
 from fabric_env.path import Path
 from fabric_env.utils import Environment, split_requirements
-from fabric_env.utils import environment
-import os
-
-from fabric.api import env    # for import from upper fabfile
-
-from fabric.decorators import task as f_task
+# from fabric_env.utils import environment
+from fabric_env.utils import red
 from fabric_env.utils import task
 
+environment = Environment('default')
 
 # --- tags ---
 @task
@@ -147,12 +146,14 @@ def install(*packages, **kw_packages):
     """
     pip install
     """
+    if environment.editable:
+        environment('pip install --editable ' + packages[0])
+        return None
+
     params = ''
     if environment.force:
         params += ' --force-reinstall'
 
-    if environment.editable:
-        params += ' --editable'
 
     if environment.cache:
         params += ' --download-cache=' + environment.root.pip_cache
@@ -310,6 +311,13 @@ def prepare():
     """
     prepare for deploy
     """
+    if environment.package:
+        package_prepare()
+    else:
+        project_prepare()
+
+
+def project_prepare():
     splitreqs()
     addremove()
     commit()
@@ -324,12 +332,90 @@ def project_deploy():
     collectstatic()
     restart()
 
+# =================================================
+@task
+def deploy_djangobb_save():
+    djangobb()
+    # pull()
+
+    djangobb_branch = djangobb('hg branch', capture=True)
+    # djangobb_branch = djangobb('hg branch')
+    if djangobb_branch != 'sdev':
+        return error('Чтобы продолжить должна быть выбрана ветка sdev. Сейчас же - ' + djangobb_branch)
+
+    # run('hg branch sdev')
+    addremove()
+    commit()
+    run('hg update sstable')
+    run('hg merge sdev')
+    commit('merge sdev')
+    run('hg update sdev')
+    push()
+
+
+@task
+def deploy_djangobb_load():
+    djangobb()
+    remote()
+    pull()
+    update('sstable')
+# =================================================
+@task
+def ls():
+    environment('ls')
+
+
+def stop():
+    fabric.operations
+
+@task
+def p(package):
+    global environment
+    # environment.package = True
+    environment.info("swith to {}", package)
+    if package in environment.packages:
+        environment = environment.packages[package]
+        environment.success('Switched to {name}')
+        environment.package = True
+    else:
+        # environment.error("No package '{}'", package)
+        fabric.utils.abort(red("No package '{}'".format(package)))
+
+
+def package_prepare():
+    branch = environment('hg branch', capture=True)
+    print red(branch)
+    if not environment.confirm("Commit to '{branch}'?", branch=branch):
+        return
+    # if not package.is_dev_branch(branch):
+    #     return environment.error("Чтобы продолжить должна быть выбрана ветка sdev. Сейчас выбрана '{}'", branch)
+    addremove()
+    commit()
+    update(environment.stable_branch)
+    merge(branch)
+    commit('merge ' + branch)
+    update(branch)
+    push()
+
+
+def package_deploy(package):
+    remote()
+    pull()
+    update(environment.stable_branch)
+
+
+def merge(branch=''):
+    environment('hg merge ' + branch)
+
 
 @task
 def deploy():
     """
     [project/nginx/wsgi] deploy
     """
+    if environment.package:
+        return package_deploy()
+
     if environment.nginx:
         nginx_deploy()
     elif environment.wsgi:
@@ -381,9 +467,10 @@ def update(branch=''):
 
 
 def hg_push():
-    if environment('hg push {hg_path}'):
+    if environment('hg push {hg_path}').successed:
         environment.success('Pushed')
     else:
+        # todo не работает
         environment.error('Push failed')
 
 
