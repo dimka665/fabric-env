@@ -1,92 +1,117 @@
 # coding=utf8
 
 import os
-import shutil
+import string
+from collections import OrderedDict
 
-import fabric
 from fabric.context_managers import settings
-from fabric.api import prompt
 from fabric.api import env    # for import from upper fabfile
-from fabric.decorators import task as f_task
+from fabric.operations import run, local
 
-from fabric_env.path import Path
-from fabric_env.utils import Environment, split_requirements
-# from fabric_env.utils import environment
-from fabric_env.utils import red
-from fabric_env.utils import task
+# from fabric_env.utils import Environment, split_requirements
 
-environment = Environment('default')
+from fabric_env.functils import *
 
-# --- tags ---
-@task
-def force():
-    """force [install]"""
-    environment.force = True
+# environment = Environment('default')
 
 
-@task
-def venv():
-    """env [init/delete]"""
-    environment.venv = True
+# --- Init ---
 
-
-@task
-def nocache():
-    """nocache [install]"""
-    environment.cache = False
-
-
-@task
-def editable():
+def template_path(path):
     """
-    editable [install]
+    Returns absolute path to 'path' template
     """
-    environment.editable = True
+    template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+    return os.path.join(template_dir, path)
 
 
-@task
-def nginx():
+def copy_and_fill(file_rel_path, **kwargs):
     """
-    nginx [deploy]
+    Copy file from templates to project and substitute variables
     """
-    environment.nginx = True
+    file_abs_path = template_path(file_rel_path)
+    template_string = open(file_abs_path).read().decode('utf8')
+
+    template = string.Template(template_string)
+    content = template.safe_substitute(kwargs)
+
+    open(file_rel_path, 'w').write(content)
+
+@name('project')
+def init_project():
+    name = prompt('Project name:')
+    copy_and_fill('fabric.ini', name=name)
+    if os.path.isfile('fabric.ini'):
+        success("'fabric.ini' was created")
+    else:
+        error("'fabric.ini' was not created")
+
+@name('fabric')
+def init_fabric(project_name=None):
+    project_name = prompt('Project name:')
+    # info("Creating 'fabric.ini'...")
+    copy_and_fill('fabric.ini', name=project_name)
+    if os.path.isfile('fabric.ini'):
+        success("'fabric.ini' was created")
+    else:
+        error("'fabric.ini' was not created")
+
+@name('setup')
+def init_setup():
+    name = prompt('Project name:')
+    info("Creating 'fabric.ini'...")
+    copy_and_fill('fabric.ini', name=name)
+    if os.path.isfile('fabric.ini'):
+        success("'fabric.ini' was created")
+    else:
+        error("'fabric.ini' was not created")
+
+@name('readme')
+def init_readme():
+    name = prompt('Project name:')
+    info("Creating 'fabric.ini'...")
+    copy_and_fill('fabric.ini', name=name)
+    if os.path.isfile('fabric.ini'):
+        success("'fabric.ini' was created")
+    else:
+        error("'fabric.ini' was not created")
 
 
-@task
-def wsgi():
-    """
-    wsgi [deploy]
-    """
-    environment.wsgi = True
+@name('nginx')
+def init_nginx():
+    pass
 
 
-@task
-def fake():
-    """
-    fake [migrate]
-    """
-    environment.fake = True
+def choose(message='Choose one: ', options=()):
+    entered = fabric.api.prompt(cyan('  ' + message + ', '.join(options)))
+    if len(entered) >= 2:
+        suited = filter(lambda x: x.startswith(entered), options)
+        if len(suited) == 1:
+            return suited[0]
 
 
-# --- common ---
+def run_choosen(*funcs):
+    funcs_dict = OrderedDict((func.__name__, func) for func in funcs)
+    choosen = choose(options=funcs_dict.keys())
+    return funcs_dict[choosen]()
+
+
 @task
 def init():
-    """[project/env/hg/git] init"""
-    if environment.venv:
-        env_init()
-    elif environment.hg:
-        hg_init()
-    elif environment.git:
-        git_init()
-    else:
-        project_init()
+    """
+    init []
+    """
+    return run_choosen(
+        init_setup,
+        init_readme,
+        init_fabric,
+        # init_nginx,
+        # init_uwsgi,
+        # init_gitignore,
+        # init_hgignore,
+    )
 
-
-@task
-def delete():
-    """[env] delete"""
-    if environment.env:
-        env_delete()
+# -----------------------------------------------
 
 
 # --- project ---
@@ -108,65 +133,35 @@ def project_init():
     push()
 
 
-def project_init_copy():
-    # todo убрать python
-    templates = Path.rel(__file__, '../templates/') + 'python'
-    files = ['README.rst', 'setup.py', '.hgignore', '.gitignore']
-
-    for file_ in files:
-        template = open(templates / file_).read().decode('utf8')
-        content = template.format(name=environment.name)
-        open(environment.root / file_, 'w').write(content)
-
-
-# --- virtualenv ---
-def env_init():
-    if environment.confirm('Создать виртуальное окружение?'):
-        environment('virtualenv --distribute {root.env}')  # --distribute install distribute
-
-
-def env_delete():
-    if environment.confirm("Удалить виртуальное окружение '{root.env}'?"):
-        environment('rm -rf {root.env}')
-
-
-@task
-def activate():
-    """
-    <not work>
-    """
-    pass
-
-
-# --- pip ---
-# todo когда устанавливаем новое окружение то пакеты устанавливают старые зависимости, а нам нужны новые версии
-# todo например, django-lfs устанавливает старый django-compressor==1.1.1 Нам нужен ==1.2
-@task
-def install(*packages, **kw_packages):
-    """
-    pip install
-    """
-    if environment.editable:
-        environment('pip install --editable ' + packages[0])
-        return None
-
-    params = ''
-    if environment.force:
-        params += ' --force-reinstall'
-
-
-    if environment.cache:
-        params += ' --download-cache=' + environment.root.pip_cache
-
-    for package in packages:
-        environment.env('pip install {package} {params}', package=package, params=params)
-
-    for package, version in kw_packages.items():
-        if version:
-            package_version = package + '==' + version
-            environment.env('pip install {package} {params}', package=package_version, params=params)
-        else:
-            environment.env('pip install --upgrade {package} {params}', package=package, params=params)
+# # --- pip ---
+# # todo когда устанавливаем новое окружение то пакеты устанавливают старые зависимости, а нам нужны новые версии
+# # todo например, django-lfs устанавливает старый django-compressor==1.1.1 Нам нужен ==1.2
+# @task
+# def install(*packages, **kw_packages):
+#     """
+#     pip install
+#     """
+#     if environment.editable:
+#         environment('pip install --editable ' + packages[0])
+#         return None
+#
+#     params = ''
+#     if environment.force:
+#         params += ' --force-reinstall'
+#
+#
+#     if environment.cache:
+#         params += ' --download-cache=' + environment.root.pip_cache
+#
+#     for package in packages:
+#         environment.env('pip install {package} {params}', package=package, params=params)
+#
+#     for package, version in kw_packages.items():
+#         if version:
+#             package_version = package + '==' + version
+#             environment.env('pip install {package} {params}', package=package_version, params=params)
+#         else:
+#             environment.env('pip install --upgrade {package} {params}', package=package, params=params)
 
 
 @task
@@ -516,16 +511,9 @@ def collectstatic():
     """
     manage.py collectstatic --noinput
     """
-    environment.env('./manage.py collectstatic --noinput')
+    environment.env('python manage.py collectstatic --noinput')
     environment.success('Static collected')
 
-
-@task
-def syncdb():
-    """
-    manage.py syncdb
-    """
-    environment.env('./manage.py syncdb')
 
 @task
 def migrate(app_name):
@@ -545,10 +533,6 @@ def hg_commit(message=''):
             environment.success('Commited')
     else:
         environment.error('Commit failed')
-
-
-def git_commit(message=''):
-    pass
 
 
 @task

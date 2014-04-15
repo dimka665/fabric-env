@@ -20,6 +20,8 @@ from fabric_env.path import Path
 #     return Environment.current(*args, **kwargs)
 import os
 
+class Environment0(object):
+    pass
 
 class Environment(object):
     # ещё в нём храним состояния
@@ -80,7 +82,8 @@ class Environment(object):
 
     def init_root(self, root):
         root = Path(root)
-        root.env = 'env'
+        # root.env = 'env'
+        root.env = '~/venv'
 
         root.requirements = 'requirements'
         root.requirements.common = '_common.txt'
@@ -201,8 +204,8 @@ class Environment(object):
 
 # environment = Environment('default_id')
 
-class Package():
-    pass
+# class Package():
+#     pass
 
 # todo сделать класс Library(repo, location, branch)
 def task(task_function):
