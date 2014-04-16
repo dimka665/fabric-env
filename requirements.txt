@@ -1,1 +1,3 @@
 Fabric
+virtualenv
+virtualenvwrapper

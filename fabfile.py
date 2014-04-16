@@ -1,3 +1,3 @@
 # coding=utf8
 
-from fabric_env.fabfile import *
+from fuzzy_fabric.fabfile import *
