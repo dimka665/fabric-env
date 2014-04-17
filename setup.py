@@ -19,6 +19,12 @@ setup(
         'virtualenvwrapper',
     ],
 
+    entry_points={
+        'console_scripts': [
+            'ff = fuzzy_fabric.main:main',
+        ]
+    },
+
     license='MIT License',
     classifiers=[
         'License :: OSI Approved :: MIT License',
