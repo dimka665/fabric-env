@@ -1,12 +1,12 @@
 # coding=utf8
 
 import fabric
-from fabric.colors import cyan, green, yellow, red, blue
-
+import fabric.api
+import fabric.colors
 
 # --- Input/Output ---
 
-icolor = cyan  # color for interactive
+icolor = fabric.colors.cyan  # color for interactive
 
 
 def format_message(function):
@@ -43,7 +43,7 @@ def suited_options(options, entered):
     return result
 
 
-def print_color(message, color=blue):
+def print_color(message, color=fabric.colors.blue):
     print('  ' + color(message))
 
 
@@ -62,19 +62,19 @@ def choose(message, options):
 
 @format_message
 def info(message):
-    print_color(message, blue)
+    print_color(message, fabric.colors.blue)
 
 @format_message
 def success(message):
-    print_color(message, green)
+    print_color(message, fabric.colors.green)
 
 @format_message
 def warning(message):
-    print_color(message, yellow)
+    print_color(message, fabric.colors.yellow)
 
 @format_message
 def error(message):
-    print_color(message, red)
+    print_color(message, fabric.colors.red)
 
 # --- Tasks ---
 
@@ -93,17 +93,17 @@ def function_repr(function):
     if function.__doc__:
         return function.__doc__.strip()
     else:
-        return  function.__name__
+        return function.__name__
 
 
-def call_choosen(functions, message='Execute'):
+def call_chosen(functions, message='Execute'):
     function_dict = {function_repr(function): function for function in functions}
-    choosen = choose(message, function_dict.keys())
-    return function_dict[choosen]()
+    chosen = choose(message, function_dict.keys())
+    return function_dict[chosen]()
 
 
 # -- Deprecated --
 # todo ???
 def task(task_function):
     task_function.__name__ = task_function.__name__.replace('_', '-')
-    return fabric.decorators.task(task_function)
+    return fabric.api.task(task_function)

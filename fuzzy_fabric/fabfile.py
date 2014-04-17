@@ -112,7 +112,7 @@ def init():
         init_gitignore,
         init_hgignore,
     ]
-    return call_choosen(functions, 'Init')
+    return call_chosen(functions, 'Init')
 
 
 # -----------------------------------------------
