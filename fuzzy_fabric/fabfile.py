@@ -2,27 +2,25 @@
 
 import os
 import string
+from functools import partial
 
-from fabric.operations import run, local
+from fabric.api import *
 
 from fuzzy_fabric.functils import *
 
 
-# --- Variables ---
+# decorate local
+local = partial(local, shell='/bin/bash')
+local = var_format(local)
 
-def get_var(var_name=None):
-    if not os.path.isfile('fabric.ini'):
-        return None if var_name else {}
 
-    from ConfigParser import SafeConfigParser
+@task
+def test():
+    with prefix('source virtualenvwrapper.sh'):
+        # local('workon fuzzy-fabric', shell='/bin/bash')  # Works in virtualenv
+        local('workon')  # Works in virtualenv
 
-    config_parser = SafeConfigParser()
-    config_parser.read('fabric.ini')
 
-    if var_name:
-        return config_parser.get('main', var_name)
-    else:
-        return dict(config_parser.items('main'))
 
 # --- Init ---
 
@@ -41,7 +39,8 @@ def copy_and_fill(file_path, ensure_name=False, **kwargs):
     vars.update(kwargs)
 
     if 'name' not in vars and ensure_name:
-        vars['name'] = ensure_prompt('Project name:')
+        # vars['name'] = ensure_prompt('Project name:')
+        vars['name'] = get_name()
 
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
     template_path = os.path.join(templates_dir, file_path)
@@ -62,35 +61,48 @@ def init_setup():
     """
     setup.py
     """
-    copy_and_fill('setup.py', ensure_name=True)
+    if confirm('Create setup.py?'):
+        copy_and_fill('setup.py', ensure_name=True)
+        return True
+    return False
 
 
 def init_readme():
     """
     README.rst
     """
-    copy_and_fill('README.rst')
+    if confirm('Create README.rst?'):
+        copy_and_fill('README.rst')
+        return True
+    return False
 
 
 def init_fabric():
     """
     fabric.ini
     """
-    copy_and_fill('fabric.ini', ensure_name=True)
+    if confirm('Create fabric.ini?'):
+        copy_and_fill('fabric.ini', ensure_name=True)
 
 
 def init_hgignore():
     """
     .hgignore
     """
-    return copy_and_fill('.hgignore')
+    if confirm('Create .hgignore?'):
+        copy_and_fill('.hgignore')
+        return True
+    return False
 
 
 def init_gitignore():
     """
     .gitignore
     """
-    return copy_and_fill('.gitignore')
+    if confirm('Create .gitignore?'):
+        copy_and_fill('.gitignore')
+        return True
+    return False
 
 
 def init_nginx():
@@ -100,12 +112,76 @@ def init_nginx():
     pass
 
 
+@memoize        # In Python3 replace to functools.lru_cache
+def get_name():
+    name = get_var('name')
+    if name:
+        return name
+    else:
+        return ensure_prompt('Project name:')
+
+
+@memoize        # In Python3 replace to functools.lru_cache
+def get_package_name():
+    package_name = get_var('package_name')
+    if package_name:
+        return package_name
+    else:
+        return get_name().replace('-', '_')
+
+
+def init_virtualenv(python='python2'):
+    if confirm('Create {} virtualenv?', python):
+        with prefix('source virtualenvwrapper.sh'):
+            local('mkvirtualenv "{}" -a . --python=`which {}`'.format(get_name(), python))
+        return True
+    return False
+
+
+def init_git():
+    if confirm('git init?'):
+        local('git init')
+        init_gitignore()
+        return True
+    return False
+
+
+def init_hg():
+    if confirm('hg init?'):
+        local('hg init')
+        init_hgignore()
+        return True
+    return False
+
+
+def init_package():
+    if confirm('Create package?'):
+        local('mkdir {package_name}')
+
+
+def init_all():
+    """
+    all
+    """
+    init_fabric()
+
+    if not init_virtualenv('python2'):
+        init_virtualenv('python3')
+
+    if not init_git():
+        init_hg()
+
+    init_setup()
+    init_readme()
+    init_package()
+
 @task
 def init():
     """
     setup.py/README.rst/fabric.ini/...
     """
     functions = [
+        init_all,
         init_setup,
         init_readme,
         init_fabric,
