@@ -62,7 +62,8 @@ def input_lacking_vars(template, format_kwargs):
     vars = get_var()
     vars.update(format_kwargs)
 
-    template_vars = re.findall('{(\w+})}', template)
+    template_vars = re.findall('{(\w+)}', template)
+    print(template_vars)
     entered_vars = {}
     for var_name in template_vars:
         if var_name not in vars:
@@ -75,8 +76,11 @@ def input_lacking_vars(template, format_kwargs):
 
 
 def var_format(function):
-    def inner(template, kwargs={}, *args, **format_kwargs):
+    def inner(template, *args, **format_kwargs):
+        kwargs = format_kwargs.pop('kwargs', {})
         format_kwargs = input_lacking_vars(template, format_kwargs)
+
+        print(args, format_kwargs, template)
         output = template.format(*args, **format_kwargs)
         return function(output, **kwargs)
     return inner

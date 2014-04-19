@@ -89,20 +89,14 @@ def init_hgignore():
     """
     .hgignore
     """
-    if confirm('Create .hgignore?'):
-        copy_and_fill('.hgignore')
-        return True
-    return False
+    copy_and_fill('.hgignore')
 
 
 def init_gitignore():
     """
     .gitignore
     """
-    if confirm('Create .gitignore?'):
-        copy_and_fill('.gitignore')
-        return True
-    return False
+    copy_and_fill('.gitignore')
 
 
 def init_nginx():
@@ -187,6 +181,8 @@ def init():
         init_fabric,
         init_gitignore,
         init_hgignore,
+
+        init_package,
     ]
     return call_chosen(functions, 'Init')
 
