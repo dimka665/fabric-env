@@ -2,6 +2,8 @@
 
 import os
 import re
+import inspect
+import types
 
 import fabric
 import fabric.api
@@ -62,8 +64,8 @@ def input_lacking_vars(template, format_kwargs):
     vars = get_var()
     vars.update(format_kwargs)
 
-    template_vars = re.findall('{(\w+)}', template)
-    print(template_vars)
+    template_vars = re.findall('[^{]{(\w+)}[^}]', template)
+    # print(template_vars)
     entered_vars = {}
     for var_name in template_vars:
         if var_name not in vars:
@@ -75,23 +77,57 @@ def input_lacking_vars(template, format_kwargs):
     return vars
 
 
-def var_format(function):
-    def inner(template, *args, **format_kwargs):
-        kwargs = format_kwargs.pop('kwargs', {})
-        format_kwargs = input_lacking_vars(template, format_kwargs)
+# def var_format(template, *args, **format_kwargs):
+#     format_kwargs = input_lacking_vars(template, format_kwargs)
+#     output = template.format(*args, **format_kwargs)
+#     return output
 
-        print(args, format_kwargs, template)
+
+# def var_format(func):
+def var_format_decorator(func):
+    if isinstance(func, types.FunctionType):
+        arg_spec = inspect.getargspec(func)
+    else:
+        arg_spec = inspect.getargspec(func.func)
+
+    # args, varargs, varkw = inspect.getargs(func.func_code)
+
+    if arg_spec.defaults:
+    # if func.func_defaults:
+    #     func_kwargs_names = args[-len(func.func_defaults):]
+        func_kwargs_names = arg_spec.args[-len(arg_spec.defaults):]
+    else:
+        func_kwargs_names = {}
+
+    def inner(template, *args, **kwargs):
+        func_kwargs = {}
+        for func_kwarg_name in func_kwargs_names:
+            if func_kwarg_name in kwargs:
+                func_kwargs[func_kwarg_name] = kwargs.pop(func_kwarg_name)
+
+        format_kwargs = input_lacking_vars(template, kwargs)
         output = template.format(*args, **format_kwargs)
-        return function(output, **kwargs)
+        return func(output, **func_kwargs)
+
     return inner
 
 
-@var_format
+# def var_format_decorator(function):
+#     def inner(template, *args, **format_kwargs):
+#         kwargs = format_kwargs.pop('kwargs', {})
+#         format_kwargs = input_lacking_vars(template, format_kwargs)
+#         output = template.format(*args, **format_kwargs)
+#         return function(output, **kwargs)
+#     return inner
+
+
+@var_format_decorator
 def prompt(message):
+    # message = var_format(message)
     return fabric.api.prompt(icolor('  ' + message))  # spaces inside color to avoid strip
 
 
-@var_format
+@var_format_decorator
 def ensure_prompt(message):
     if not message.endswith(':'):
         message += ':'
@@ -102,7 +138,7 @@ def ensure_prompt(message):
     return entered
 
 
-@var_format
+@var_format_decorator
 def confirm(message='Are you sure?'):
     return fabric.api.prompt(icolor('  ' + message)) == 'yes'
 
@@ -120,7 +156,8 @@ def print_color(message, color=fabric.colors.blue):
     print('  ' + color(message))
 
 
-def choose(message, options):
+@var_format_decorator
+def choose(message, options=[]):
     # print options
     options.sort(key=str.lower)
     print_color('\n  '.join(options), icolor)
@@ -133,21 +170,36 @@ def choose(message, options):
                 return suited[0]
 
 
-@var_format
+# class Printer():
+#     def __int__(self, color):
+#         self.color = color
+#
+#     def __call__(self, message):
+#         message = var_format(message)
+#         print_color(message, self.color)
+
+
+@var_format_decorator
 def info(message):
     print_color(message, fabric.colors.blue)
 
-@var_format
+@var_format_decorator
 def success(message):
     print_color(message, fabric.colors.green)
 
-@var_format
+@var_format_decorator
 def warning(message):
     print_color(message, fabric.colors.yellow)
 
-@var_format
+@var_format_decorator
 def error(message):
     print_color(message, fabric.colors.red)
+
+
+# info = Printer(fabric.colors.blue)
+# error = Printer(fabric.colors.red)
+# warning = Printer(fabric.colors.yellow)
+# success = Printer(fabric.colors.green)
 
 # --- Tasks ---
 
@@ -171,7 +223,8 @@ def function_repr(function):
 
 def call_chosen(functions, message='Execute'):
     function_dict = {function_repr(function): function for function in functions}
-    chosen = choose(message, function_dict.keys())
+    # chosen = choose(message, kwargs={'options': function_dict.keys()})
+    chosen = choose(message, options=function_dict.keys())
     return function_dict[chosen]()
 
 

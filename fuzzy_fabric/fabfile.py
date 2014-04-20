@@ -11,7 +11,7 @@ from fuzzy_fabric.functils import *
 
 # decorate local
 local = partial(local, shell='/bin/bash')
-local = var_format(local)
+local = var_format_decorator(local)
 
 
 @task
@@ -24,7 +24,8 @@ def test():
 
 # --- Init ---
 
-def copy_and_fill(file_path, ensure_name=False, **kwargs):
+# def copy_and_fill(file_path, ensure_name=False, **kwargs):
+def copy_and_fill(file_path, **kwargs):
     """
     Copy file from templates to project and substitute variables
     """
@@ -35,18 +36,19 @@ def copy_and_fill(file_path, ensure_name=False, **kwargs):
         else:
             return None
 
-    vars = get_var()
-    vars.update(kwargs)
-
-    if 'name' not in vars and ensure_name:
+    # vars = get_var()
+    # vars.update(kwargs)
+    #
+    # if 'name' not in vars and ensure_name:
         # vars['name'] = ensure_prompt('Project name:')
-        vars['name'] = get_name()
+        # vars['name'] = get_name()
 
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
     template_path = os.path.join(templates_dir, file_path)
     template_string = open(template_path).read().decode('utf8')
 
     template = string.Template(template_string)
+    vars = input_lacking_vars(template_string, kwargs)
     content = template.safe_substitute(vars)
 
     open(file_path, 'w').write(content)
@@ -124,10 +126,10 @@ def get_package_name():
         return get_name().replace('-', '_')
 
 
-def init_virtualenv(python='python2'):
-    if confirm('Create {} virtualenv?', python):
+def init_virtualenv(python_version='python2'):
+    if confirm('Create {} virtualenv?', python_version):
         with prefix('source virtualenvwrapper.sh'):
-            local('mkvirtualenv "{}" -a . --python=`which {}`'.format(get_name(), python))
+            local('mkvirtualenv "{project_name}" -a . --python=`which {}`', python_version)
         return True
     return False
 
