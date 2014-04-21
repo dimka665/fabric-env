@@ -4,51 +4,61 @@ import os
 import string
 from functools import partial
 
-from fabric.api import *
+from fabric.api import local
+from fabric.context_managers import prefix
+from fabric.state import env
 
-from fuzzy_fabric.functils import *
+from fuzzy_fabric.utils import var_format, task
+from fuzzy_fabric.utils import input_lacking_vars
+from fuzzy_fabric.utils import confirm, ensure_prompt, choose, call_chosen
+from fuzzy_fabric.utils import info, warning, error, success
+
+
+SHY = 'shy'
+NORMAL = 'normal'
+AGGRESSIVE = 'aggressive'
 
 
 # decorate local
 local = partial(local, shell='/bin/bash')
-local = var_format_decorator(local)
+local = var_format(local)
 
 
 @task
 def test():
     with prefix('source virtualenvwrapper.sh'):
-        # local('workon fuzzy-fabric', shell='/bin/bash')  # Works in virtualenv
-        local('workon')  # Works in virtualenv
-
+        local('workon')  # works in virtualenv
 
 
 # --- Init ---
-
-# def copy_and_fill(file_path, ensure_name=False, **kwargs):
-def copy_and_fill(file_path, **kwargs):
+def copy_and_fill(file_path):
     """
     Copy file from templates to project and substitute variables
     """
-    if os.path.isfile(file_path):
-        warning("'{}' exists already", file_path)
-        if confirm("Rewrite '{}'?", file_path):
-            os.remove(file_path)
-        else:
-            return None
 
-    # vars = get_var()
-    # vars.update(kwargs)
-    #
-    # if 'name' not in vars and ensure_name:
-        # vars['name'] = ensure_prompt('Project name:')
-        # vars['name'] = get_name()
+    if os.path.isfile(file_path):
+        if env.strategy == SHY:
+            info("'{}' exists", file_path)
+            return
+
+        elif env.strategy == AGGRESSIVE:
+            os.remove(file_path)
+
+        else:
+            warning("'{}' exists already", file_path)
+            if confirm("Rewrite '{}'?", file_path):
+                os.remove(file_path)
+
+    elif env.strategy == SHY:
+        if not confirm("Create '{}'?", file_path):
+            return
 
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
     template_path = os.path.join(templates_dir, file_path)
     template_string = open(template_path).read().decode('utf8')
 
     template = string.Template(template_string)
-    vars = input_lacking_vars(template_string, kwargs)
+    vars = input_lacking_vars(template_string, {})
     content = template.safe_substitute(vars)
 
     open(file_path, 'w').write(content)
@@ -59,39 +69,11 @@ def copy_and_fill(file_path, **kwargs):
         error("'{}' is not exists", file_path)
 
 
-def init_setup():
-    """
-    setup.py
-    """
-    if confirm('Create setup.py?'):
-        copy_and_fill('setup.py', ensure_name=True)
-        return True
-    return False
-
-
-def init_readme():
-    """
-    README.rst
-    """
-    if confirm('Create README.rst?'):
-        copy_and_fill('README.rst')
-        return True
-    return False
-
-
 def init_fabric():
     """
     fabric.ini
     """
-    if confirm('Create fabric.ini?'):
-        copy_and_fill('fabric.ini', ensure_name=True)
-
-
-def init_hgignore():
-    """
-    .hgignore
-    """
-    copy_and_fill('.hgignore')
+    copy_and_fill('fabric.ini')
 
 
 def init_gitignore():
@@ -101,6 +83,27 @@ def init_gitignore():
     copy_and_fill('.gitignore')
 
 
+def init_hgignore():
+    """
+    .hgignore
+    """
+    copy_and_fill('.hgignore')
+
+
+def init_readme():
+    """
+    README.rst
+    """
+    copy_and_fill('README.rst')
+
+
+def init_setup():
+    """
+    setup.py
+    """
+    copy_and_fill('setup.py')
+
+
 def init_nginx():
     """
     nginx
@@ -108,22 +111,11 @@ def init_nginx():
     pass
 
 
-@memoize        # In Python3 replace to functools.lru_cache
-def get_name():
-    name = get_var('name')
-    if name:
-        return name
-    else:
-        return ensure_prompt('Project name:')
-
-
-@memoize        # In Python3 replace to functools.lru_cache
-def get_package_name():
-    package_name = get_var('package_name')
-    if package_name:
-        return package_name
-    else:
-        return get_name().replace('-', '_')
+def init_package():
+    if confirm('Create package?'):
+        local('mkdir {package_name}')
+        py_file = '{package_name}/{package_name}.py'
+        open(, 'w').write('# coding=utf8\n\nimport os\n')
 
 
 def init_virtualenv(python_version='python2'):
@@ -135,6 +127,11 @@ def init_virtualenv(python_version='python2'):
 
 
 def init_git():
+
+    if os.path.isdir('.git'):
+        info('Git repo exists')
+        return True
+
     if confirm('git init?'):
         local('git init')
         init_gitignore()
@@ -150,26 +147,24 @@ def init_hg():
     return False
 
 
-def init_package():
-    if confirm('Create package?'):
-        local('mkdir {package_name}')
-
-
 def init_all():
     """
     all
     """
+    env.strategy = SHY
+
     init_fabric()
 
     if not init_virtualenv('python2'):
         init_virtualenv('python3')
 
-    if not init_git():
-        init_hg()
+    if not init_gitignore():
+        init_hgignore()
 
     init_setup()
     init_readme()
     init_package()
+
 
 @task
 def init():
@@ -183,14 +178,14 @@ def init():
         init_fabric,
         init_gitignore,
         init_hgignore,
-
         init_package,
     ]
     return call_chosen(functions, 'Init')
 
 
-# -----------------------------------------------
-
+# ---------- OLD CODE -----------
+# ---------- OLD CODE -----------
+# ---------- OLD CODE -----------
 
 # --- project ---
 def project_init():
@@ -266,14 +261,6 @@ def project_deploy():
     restart()
 
 # =================================================
-@task
-def ls():
-    environment('ls')
-
-
-def stop():
-    fabric.operations
-
 @task
 def p(package):
     global environment

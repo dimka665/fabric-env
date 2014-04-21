@@ -1,273 +1,197 @@
-# coding=utf-8
+# coding=utf8
+import functools
 
-import sys
-from contextlib import contextmanager
+import os
+import re
+import inspect
+import types
 
 import fabric
-from fabric.colors import yellow, red, cyan, green, white, blue
-# from fabric.context_managers import prefix, cd, lcd
-# from fabric.api import prompt
+import fabric.api
+import fabric.colors
 
-from fabric_env.path import Path
 
-# def run(command=None, **kwargs):
-#     if command:
-#         return Environment.current(command, **kwargs)
-#     else:
-#         return Environment.current
+class memoize():
 
-# def environment(*args, **kwargs):
-#     return Environment.current(*args, **kwargs)
-import os
+    def __init__(self, function):
+        self.function = function
+        self.last_result = None
 
-class Environment0(object):
-    pass
-
-class Environment(object):
-    # ещё в нём храним состояния
-    # tags
-    remote = False
-    editable = False
-    package = False
-
-    _hg = False
-    _git = False
-
-    venv = False
-
-    force = False # pip --force-reinstall
-    cache = True   # pip --download-cache
-
-    hg_path = ''
-    git_path = ''
-
-    # settings
-    pip_cache = '~/.pip-cache'
-    stable_branch = 'default'
-
-    # utils
-    packages = {}
-
-    @property
-    def hg(self):
-        return self._hg or (not self._git and self.hg_path)
-        self('hg status', capture)
-
-    @hg.setter
-    def hg(self, value):
-        self._hg = value
-
-    @property
-    def git(self):
-        return self._git or (not self._hg and self.git_path)
-
-    @git.setter
-    def git(self, value):
-        self._git = value
-
-    def __init__(self, name, root='.', remote_root='.'):
-        self.__dict__['_options'] = {}
-
-        self.id = name
-        self.name = name
-
-        self.local_root = self.init_root(root)
-        self.remote_root = self.init_root(remote_root)
-
-        self.platform = 'linux2'
-
-        # repos
-        self.hg_path = ''
-        self.git_path = ''
-
-    def init_root(self, root):
-        root = Path(root)
-        # root.env = 'env'
-        root.env = '~/venv'
-
-        root.requirements = 'requirements'
-        root.requirements.common = '_common.txt'
-        root.requirements.ignore = '_ignore.txt'
-        root.requirements.private = '{id}.txt'.format(id=self.id)
-
-        root.config = 'config'
-        root.config.nginx = 'nginx.conf'
-        root.config.uwsgi = 'uwsgi.ini'
-
-        root.log = 'log'
-        root.log.nginx = 'nginx.log'
-        root.log.uwsgi = 'uwsgi.log'
-
-        # root.pip_cache = os.path.expanduser('~/.pip-cache')
-        # root.temp = '/tmp'
-        # root.src = 'src'
-
-        return root
-
-    @property
-    def root(self):
-        return self.remote_root if self.remote else self.local_root
-
-    @root.setter
-    def root(self, value):
-        self.local_root = self.init_root(value)
-
-    def root_from(self, file_):
-        self.local_root = self.init_root(Path.rel(file_))
-
-    def format(self, template, *args, **kwargs):
-        self_dict = self.__dict__.copy()
-        self_dict.update(kwargs)
-        self_dict['root'] = self.root
-        return template.format(*args, **self_dict)
-
-    def __call__(self, command=None, *args, **kwargs):
-        command = self.format(command, *args, **kwargs)
-        self.info(command)
-
-        if self.remote:
-            with fabric.context_managers.cd(self.root):
-                return fabric.api.run(command)
+    def __call__(self, *args, **kwargs):
+        if self.last_result:
+            return self.last_result
         else:
-            with fabric.context_managers.lcd(self.root):
-                return fabric.api.local(command, capture=True)
-
-    # def capture(self):
-    #     pass
-
-    @contextmanager
-    def virtualenv(self):
-        # path = self.remote_root.env if self.remote else self.root.env
-        path = self.root.env
-        if self.platform == 'win32':
-            prefix_command = path + 'scripts/activate'
-        else:
-            prefix_command = '. {}'.format(path + 'bin/activate')
-
-        with fabric.context_managers.prefix(prefix_command):
-            yield
-
-    @contextmanager
-    def env(self, command, *args, **kwargs):
-        # root = self.remote_root if self.remote else self.root
-
-        # prefix_command = '. {}'.format(root.env + 'bin/activate')
-        prefix_command = '. ' + self.root.env / 'bin/activate'
-
-        # with fabric.context_managers.prefix("'" + prefix_command + "'"):
-        with fabric.context_managers.prefix(prefix_command):
-            return self(command, *args, **kwargs)
-
-    def activate(self):
-        if self.platform == 'win32':
-            prefix_command = self.root.env + 'scripts/activate'
-        else:
-            prefix_command = '. {}'.format(self.root.env + 'bin/activate')
-        return prefix_command
-
-    def add_format(function):
-        def wrapped(self, template, *args, **kwargs):
-            message = self.format(template, *args, **kwargs)
-            return function(self, message)
-        return wrapped
-
-    @add_format
-    def confirm(self, message='Sure?'):
-        return fabric.api.prompt(cyan('  ' + message + " ('yes' to confirm)")) == 'yes'
-
-    @add_format
-    def info(self, message):
-        print('  ' + cyan(message))
-
-    @add_format
-    def success(self, message):
-        print('  ' + green(message))
-
-    @add_format
-    def warning(self, message):
-        print('  ' + yellow(message))
-
-    @add_format
-    def error(self, message):
-        print('  ' + red(message))
-
-    @add_format
-    def prompt(self, message):
-        return fabric.api.prompt(cyan('  ' + message))    # spaces inside cyan to cancel trim
-
-    @classmethod
-    def add_package(cls, package):
-        if isinstance(package, cls):
-            print('is instance == true')
-            cls.packages[package.name] = package
+            result = self.function(*args, **kwargs)
+            self.last_result = result
+            return result
 
 
-# environment = Environment('default_id')
 
-# class Package():
-#     pass
+# --- Variables ---
+# todo to cache on get and set
+def get_var(var_name=None):
+    if os.path.isfile('fabric.ini'):
+        from ConfigParser import SafeConfigParser
+        config_parser = SafeConfigParser()
+        config_parser.read('fabric.ini')
+        vars = dict(config_parser.items('main'))
+    else:
+        vars = {}
 
-# todo сделать класс Library(repo, location, branch)
+    return vars.get(var_name, None) if var_name else vars
+
+
+def set_var(var_name, var_value):
+    from ConfigParser import SafeConfigParser
+    config_parser = SafeConfigParser()
+    config_parser.read('fabric.ini')
+
+    if not config_parser.has_section('main'):
+        config_parser.add_section('main')
+
+    config_parser.set('main', var_name, var_value)
+    config_parser.write(open('fabric.ini', 'w'))
+
+
+# --- Input/Output ---
+
+icolor = fabric.colors.cyan  # color for interactive
+
+
+def humanize(var_name):
+    return var_name.replace('_', ' ').capitalize()
+
+
+def input_lacking_vars(template, format_kwargs):
+    vars = get_var()
+    vars.update(format_kwargs)
+
+    # take format token from template
+    # e.g., 'package_name' from 'Init {package_name}?'
+    template_vars = re.findall('(?!<[^{]){(\w+)}(?![^}])', template)
+    entered_vars = {}
+    for var_name in template_vars:
+        if var_name not in vars:
+            var_value = ensure_prompt(humanize(var_name))
+            entered_vars[var_name] = var_value
+            set_var(var_name, var_value)
+
+    vars.update(entered_vars)
+    return vars
+
+
+def var_format(func):
+
+    if isinstance(func, functools.partial):
+        func = func.func
+
+    func_kwargs_names = {}
+    argspec = inspect.getargspec(func)
+    if argspec.defaults:
+        func_kwargs_names = argspec.args[-len(argspec.defaults):]
+
+    def inner(template, *args, **kwargs):
+        func_kwargs = {}
+        for func_kwarg_name in func_kwargs_names:
+            if func_kwarg_name in kwargs:
+                func_kwargs[func_kwarg_name] = kwargs.pop(func_kwarg_name)
+
+        format_kwargs = input_lacking_vars(template, kwargs)
+        output = template.format(*args, **format_kwargs)
+        return func(output, **func_kwargs)
+
+    return inner
+
+
+def var_format_message(template, *args, **kwargs):
+    format_kwargs = input_lacking_vars(template, kwargs)
+    return template.format(*args, **format_kwargs)
+
+
+@var_format
+def prompt(message):
+    # message = var_format(message)
+    return fabric.api.prompt(icolor('  ' + message))  # spaces inside color to avoid strip
+
+
+@var_format
+def ensure_prompt(message):
+    if not message.endswith(':'):
+        message += ':'
+
+    entered = ''
+    while not entered:
+        entered = fabric.api.prompt(icolor('  ' + message))  # spaces inside color to avoid strip
+    return entered
+
+
+@var_format
+def confirm(message='Are you sure?'):
+    return fabric.api.prompt(icolor('  ' + message)) == 'yes'
+
+
+def suited_options(options, entered):
+    result = []
+    for option in options:
+        handy_for_input_option = option.lstrip(' .-').lower()
+        if handy_for_input_option.startswith(entered):
+            result.append(option)
+    return result
+
+
+def print_color(message, color=fabric.colors.blue):
+    print('  ' + color(message))
+
+
+@var_format
+def choose(message, options=[]):
+    # print options
+    options.sort(key=str.lower)
+    print_color('\n  '.join(options), icolor)
+    print_color('')
+    while True:
+        entered = fabric.api.prompt(icolor('  {}:'.format(message)))
+        if len(entered) >= 2:
+            suited = suited_options(options, entered)
+            if len(suited) == 1:
+                return suited[0]
+
+
+@var_format
+def info(message):
+    print_color(message, fabric.colors.blue)
+
+@var_format
+def success(message):
+    print_color(message, fabric.colors.green)
+
+@var_format
+def warning(message):
+    print_color(message, fabric.colors.yellow)
+
+@var_format
+def error(message):
+    print_color(message, fabric.colors.red)
+
+
+def func_repr(func):
+    if isinstance(func, functools.partial):
+        func = func.func
+
+    if func.__doc__:
+        return func.__doc__.strip()
+    else:
+        return func.__name__
+
+
+def call_chosen(funcs, message='Execute'):
+    func_dict = {func_repr(func): func for func in funcs}
+    chosen = choose(message, options=func_dict.keys())
+    return func_dict[chosen]()
+
+
+# -- Deprecated --
+# todo ???
 def task(task_function):
     task_function.__name__ = task_function.__name__.replace('_', '-')
-    return fabric.decorators.task(task_function)
-
-
-# todo добавить поддержку ссылок и репозиториев, и удаление
-def split_requirements(requirements_txt, environment):
-
-    common_packages = read_packages(environment.root.requirements.common)
-    env_packages = read_packages(environment.root.requirements.private)
-    ignore_packages = read_packages(environment.root.requirements.ignore)
-
-    requirements = read_packages(requirements_txt)
-
-    for name, packages in [('common', common_packages),
-                           (environment.id, env_packages),
-                           ('depends', ignore_packages)]:
-        for package_name in sorted(packages.keys()):
-            # если в файле есть пакет с именем установленного пакета
-            if package_name in requirements:
-                packages[package_name] = requirements.pop(package_name)
-                # packages[package_name] = requirements[package_name]
-                # del requirements[package_name]
-            # если нет, то интересуемся не удалить ли его
-            elif fabric.api.prompt("Delete '{}' from '{}'? ('yes' to confirm)".format(package_name, name)) == 'yes':
-                del packages[package_name]
-
-    # оставшиеся установленные пакеты
-    for package_name in requirements:
-        req_name = fabric.api.prompt("Where '{}' to put? (common/{}/ignore) : ".format(package_name, environment.id))
-        if req_name == 'ignore':
-            ignore_packages[package_name] = requirements[package_name]
-        elif req_name == environment.id:
-            env_packages[package_name] = requirements[package_name]
-        elif req_name == 'common':
-            common_packages[package_name] = requirements[package_name]
-
-    write_packages(environment.root.requirements.private, env_packages)
-    write_packages(environment.root.requirements.common, common_packages)
-    write_packages(environment.root.requirements.ignore, ignore_packages)
-
-# если ссылка, то все норм.
-
-def write_packages(requirements, packages):
-    with open(requirements, 'w') as requirements:
-        for package_name, line in sorted(packages.items()):
-            requirements.writelines([line])
-
-
-def read_packages(requirements):
-    """
-    Читаем результат pip freeze
-    """
-    with open(requirements) as requirements:
-        packages = {}
-        for line in requirements.readlines():
-            # берем все постоянные пакеты
-            if not line.startswith('-e'):
-                # записываем их по возможности с именами
-                package_name = line.split('==')[0]
-                packages[package_name] = line
-    return packages
-
+    return fabric.api.task(task_function)
