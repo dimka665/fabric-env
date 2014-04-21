@@ -96,21 +96,20 @@ def var_format(func):
             if func_kwarg_name in kwargs:
                 func_kwargs[func_kwarg_name] = kwargs.pop(func_kwarg_name)
 
-        format_kwargs = input_lacking_vars(template, kwargs)
-        output = template.format(*args, **format_kwargs)
+        output = format_template(template, *args, **kwargs)
         return func(output, **func_kwargs)
 
     return inner
 
 
-def var_format_message(template, *args, **kwargs):
+def format_template(template, *args, **kwargs):
     format_kwargs = input_lacking_vars(template, kwargs)
-    return template.format(*args, **format_kwargs)
+    output = template.format(*args, **format_kwargs)
+    return output
 
 
 @var_format
 def prompt(message):
-    # message = var_format(message)
     return fabric.api.prompt(icolor('  ' + message))  # spaces inside color to avoid strip
 
 

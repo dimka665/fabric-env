@@ -8,7 +8,7 @@ from fabric.api import local
 from fabric.context_managers import prefix
 from fabric.state import env
 
-from fuzzy_fabric.utils import var_format, task
+from fuzzy_fabric.utils import var_format, task, get_var
 from fuzzy_fabric.utils import input_lacking_vars
 from fuzzy_fabric.utils import confirm, ensure_prompt, choose, call_chosen
 from fuzzy_fabric.utils import info, warning, error, success
@@ -31,42 +31,44 @@ def test():
 
 
 # --- Init ---
-def copy_and_fill(file_path):
+def copy_and_fill(from_path, to_dir=''):
     """
     Copy file from templates to project and substitute variables
     """
 
-    if os.path.isfile(file_path):
+    to_path = os.path.join(to_dir, from_path)
+
+    if os.path.isfile(to_path):
         if env.strategy == SHY:
-            info("'{}' exists", file_path)
+            info("'{}' exists", to_path)
             return
 
         elif env.strategy == AGGRESSIVE:
-            os.remove(file_path)
+            os.remove(to_path)
 
         else:
-            warning("'{}' exists already", file_path)
-            if confirm("Rewrite '{}'?", file_path):
-                os.remove(file_path)
+            warning("'{}' exists already", to_path)
+            if confirm("Rewrite '{}'?", to_path):
+                os.remove(to_path)
 
     elif env.strategy == SHY:
-        if not confirm("Create '{}'?", file_path):
+        if not confirm("Create '{}'?", to_path):
             return
 
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
-    template_path = os.path.join(templates_dir, file_path)
+    template_path = os.path.join(templates_dir, from_path)
     template_string = open(template_path).read().decode('utf8')
 
     template = string.Template(template_string)
     vars = input_lacking_vars(template_string, {})
     content = template.safe_substitute(vars)
 
-    open(file_path, 'w').write(content)
+    open(from_path, 'w').write(content)
 
-    if os.path.isfile(file_path):
-        success("'{}' was wrote", file_path)
+    if os.path.isfile(to_path):
+        success("'{}' was wrote", to_path)
     else:
-        error("'{}' is not exists", file_path)
+        error("'{}' is not exists", to_path)
 
 
 def init_fabric():
@@ -112,10 +114,7 @@ def init_nginx():
 
 
 def init_package():
-    if confirm('Create package?'):
-        local('mkdir {package_name}')
-        py_file = '{package_name}/{package_name}.py'
-        open(, 'w').write('# coding=utf8\n\nimport os\n')
+    copy_and_fill('module.py', to_dir=get_var('package_name'))
 
 
 def init_virtualenv(python_version='python2'):
