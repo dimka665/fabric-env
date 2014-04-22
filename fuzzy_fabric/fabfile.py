@@ -8,8 +8,7 @@ from fabric.api import local
 from fabric.context_managers import prefix
 from fabric.state import env
 
-from fuzzy_fabric.utils import var_format, task, get_var
-from fuzzy_fabric.utils import input_lacking_vars
+from fuzzy_fabric.utils import format_decorator, task, vars, get_missed_vars, format_template
 from fuzzy_fabric.utils import confirm, ensure_prompt, choose, call_chosen
 from fuzzy_fabric.utils import info, warning, error, success
 
@@ -21,7 +20,7 @@ AGGRESSIVE = 'aggressive'
 
 # decorate local
 local = partial(local, shell='/bin/bash')
-local = var_format(local)
+local = format_decorator(local)
 
 
 @task
@@ -31,19 +30,24 @@ def test():
 
 
 # --- Init ---
-def copy_and_fill(from_path, to_dir=''):
+def copy_and_fill(from_path, to_path=''):
     """
     Copy file from templates to project and substitute variables
     """
 
-    to_path = os.path.join(to_dir, from_path)
+    if to_path:
+        to_path = format_template(to_path)
+    else:
+        to_path = from_path
+
+    strategy = env.get('strategy', NORMAL)
 
     if os.path.isfile(to_path):
-        if env.strategy == SHY:
+        if strategy == SHY:
             info("'{}' exists", to_path)
             return
 
-        elif env.strategy == AGGRESSIVE:
+        elif strategy == AGGRESSIVE:
             os.remove(to_path)
 
         else:
@@ -51,7 +55,7 @@ def copy_and_fill(from_path, to_dir=''):
             if confirm("Rewrite '{}'?", to_path):
                 os.remove(to_path)
 
-    elif env.strategy == SHY:
+    elif strategy == SHY:
         if not confirm("Create '{}'?", to_path):
             return
 
@@ -60,10 +64,13 @@ def copy_and_fill(from_path, to_dir=''):
     template_string = open(template_path).read().decode('utf8')
 
     template = string.Template(template_string)
-    vars = input_lacking_vars(template_string, {})
-    content = template.safe_substitute(vars)
+    format_kwargs = get_missed_vars(template_string, {})
+    content = template.safe_substitute(format_kwargs)
 
-    open(from_path, 'w').write(content)
+    dirs = os.path.dirname(to_path)
+    if dirs:
+        local('mkdir -p "{}"', dirs)
+    open(to_path, 'w').write(content)
 
     if os.path.isfile(to_path):
         success("'{}' was wrote", to_path)
@@ -114,7 +121,11 @@ def init_nginx():
 
 
 def init_package():
-    copy_and_fill('module.py', to_dir=get_var('package_name'))
+    """
+    package/__init__.py
+    """
+    copy_and_fill('module.py', '{package_name}/{package_name}.py')
+    local('touch {package_name}/__init__.py')
 
 
 def init_virtualenv(python_version='python2'):
@@ -148,7 +159,7 @@ def init_hg():
 
 def init_all():
     """
-    all
+    All
     """
     env.strategy = SHY
 

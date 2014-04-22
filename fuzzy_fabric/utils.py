@@ -1,100 +1,66 @@
 # coding=utf8
-import functools
 
 import os
 import re
 import inspect
-import types
+import functools
 
 import fabric
 import fabric.api
 import fabric.colors
 
 
-class memoize():
-
-    def __init__(self, function):
-        self.function = function
-        self.last_result = None
-
-    def __call__(self, *args, **kwargs):
-        if self.last_result:
-            return self.last_result
-        else:
-            result = self.function(*args, **kwargs)
-            self.last_result = result
-            return result
-
-
-
-# --- Variables ---
-# todo to cache on get and set
-def get_var(var_name=None):
-    if os.path.isfile('fabric.ini'):
-        from ConfigParser import SafeConfigParser
-        config_parser = SafeConfigParser()
-        config_parser.read('fabric.ini')
-        vars = dict(config_parser.items('main'))
-    else:
-        vars = {}
-
-    return vars.get(var_name, None) if var_name else vars
-
-
-def set_var(var_name, var_value):
-    from ConfigParser import SafeConfigParser
-    config_parser = SafeConfigParser()
-    config_parser.read('fabric.ini')
-
-    if not config_parser.has_section('main'):
-        config_parser.add_section('main')
-
-    config_parser.set('main', var_name, var_value)
-    config_parser.write(open('fabric.ini', 'w'))
-
-
-# --- Input/Output ---
-
+FUZZY_VARS_FILE = 'fabric.ini'
 icolor = fabric.colors.cyan  # color for interactive
+
+
+class Vars(dict):
+
+    def __getitem__(self, key):
+        if key not in self:
+            if os.path.isfile(FUZZY_VARS_FILE):
+                from ConfigParser import SafeConfigParser
+                config_parser = SafeConfigParser()
+                config_parser.read(FUZZY_VARS_FILE)
+
+                self.update(config_parser.items('main'))
+
+            if key not in self:
+                value = ensure_prompt(humanize(key))
+                self[key] = value
+                if os.path.isfile(FUZZY_VARS_FILE):
+                    config_parser.set('main', key, value)
+                    config_parser.write(open(FUZZY_VARS_FILE, 'w'))
+
+        return dict.__getitem__(self, key)
 
 
 def humanize(var_name):
     return var_name.replace('_', ' ').capitalize()
 
 
-def input_lacking_vars(template, format_kwargs):
-    vars = get_var()
-    vars.update(format_kwargs)
-
-    # take format token from template
-    # e.g., 'package_name' from 'Init {package_name}?'
-    template_vars = re.findall('(?!<[^{]){(\w+)}(?![^}])', template)
-    entered_vars = {}
-    for var_name in template_vars:
-        if var_name not in vars:
-            var_value = ensure_prompt(humanize(var_name))
-            entered_vars[var_name] = var_value
-            set_var(var_name, var_value)
-
-    vars.update(entered_vars)
-    return vars
+vars = Vars()
 
 
-def var_format(func):
+# --- Format ---
 
+def format_decorator(func):
+
+    inspect_func = func
     if isinstance(func, functools.partial):
-        func = func.func
+        inspect_func = func.func
 
     func_kwargs_names = {}
-    argspec = inspect.getargspec(func)
+    argspec = inspect.getargspec(inspect_func)
+
     if argspec.defaults:
         func_kwargs_names = argspec.args[-len(argspec.defaults):]
 
     def inner(template, *args, **kwargs):
         func_kwargs = {}
-        for func_kwarg_name in func_kwargs_names:
-            if func_kwarg_name in kwargs:
-                func_kwargs[func_kwarg_name] = kwargs.pop(func_kwarg_name)
+        for func_kwarg_key in func_kwargs_names:
+            if func_kwarg_key in kwargs:
+                func_kwargs[func_kwarg_key] = kwargs.pop(func_kwarg_key)
 
         output = format_template(template, *args, **kwargs)
         return func(output, **func_kwargs)
@@ -102,18 +68,32 @@ def var_format(func):
     return inner
 
 
-def format_template(template, *args, **kwargs):
-    format_kwargs = input_lacking_vars(template, kwargs)
+def format_template(template, *args, **format_kwargs):
+    format_kwargs = get_missed_vars(template, format_kwargs)
     output = template.format(*args, **format_kwargs)
     return output
 
 
-@var_format
+def get_missed_vars(template, format_kwargs):
+    # take format token from template
+    # e.g., 'package_name' from 'Init {package_name}?'
+    template_var_names = re.findall('(?!<{){(\w+)}(?!})', template)
+
+    for var_name in template_var_names:
+        if var_name not in format_kwargs:
+            format_kwargs[var_name] = vars[var_name]
+
+    return format_kwargs
+
+
+# --- Input/Output ---
+
+@format_decorator
 def prompt(message):
     return fabric.api.prompt(icolor('  ' + message))  # spaces inside color to avoid strip
 
 
-@var_format
+@format_decorator
 def ensure_prompt(message):
     if not message.endswith(':'):
         message += ':'
@@ -124,7 +104,7 @@ def ensure_prompt(message):
     return entered
 
 
-@var_format
+@format_decorator
 def confirm(message='Are you sure?'):
     return fabric.api.prompt(icolor('  ' + message)) == 'yes'
 
@@ -142,7 +122,7 @@ def print_color(message, color=fabric.colors.blue):
     print('  ' + color(message))
 
 
-@var_format
+@format_decorator
 def choose(message, options=[]):
     # print options
     options.sort(key=str.lower)
@@ -156,19 +136,19 @@ def choose(message, options=[]):
                 return suited[0]
 
 
-@var_format
+@format_decorator
 def info(message):
     print_color(message, fabric.colors.blue)
 
-@var_format
+@format_decorator
 def success(message):
     print_color(message, fabric.colors.green)
 
-@var_format
+@format_decorator
 def warning(message):
     print_color(message, fabric.colors.yellow)
 
-@var_format
+@format_decorator
 def error(message):
     print_color(message, fabric.colors.red)
 
