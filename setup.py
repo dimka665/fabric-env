@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='fuzzy-fabric',
-    version='0.6',
+    version='0.6.1',
 
     author='Dmitry Voronin',
     author_email='dimka665@gmail.com',
