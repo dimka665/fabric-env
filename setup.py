@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='fuzzy-fabric',
-    version='0.6.1',
+    version='0.6.3',
 
     author='Dmitry Voronin',
     author_email='dimka665@gmail.com',
@@ -13,6 +13,13 @@ setup(
     description='Fuzzy Functions For Fabric',
 
     packages=find_packages(),
+    package_data={
+        '': [
+            'templates/.*',
+            'templates/*.*',
+            'templates/nginx/*.*',
+        ]
+    },
     install_requires=[
         'Fabric',
         'virtualenv',
