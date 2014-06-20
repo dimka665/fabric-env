@@ -157,6 +157,13 @@ def init_hg():
     return False
 
 
+def init_django():
+    # 1. django-admin.py startproject project .
+    # 3. django-admin.py startapp {app_name}
+    # 4. make  manage.py  executable
+    pass
+
+
 def init_all():
     """
     All
