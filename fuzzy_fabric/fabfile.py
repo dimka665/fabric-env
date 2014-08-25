@@ -4,9 +4,11 @@ import os
 import string
 from functools import partial
 
+import fabric
+from fabric.api import env
+from fabric.api import put
 from fabric.api import local
 from fabric.context_managers import prefix
-from fabric.state import env
 
 from fuzzy_fabric.utils import format_decorator, task, vars, get_missed_vars, format_template
 from fuzzy_fabric.utils import confirm, ensure_prompt, choose, call_chosen
@@ -200,10 +202,26 @@ def init():
     return call_chosen(functions, 'Init')
 
 
-# ---------- OLD CODE -----------
-# ---------- OLD CODE -----------
-# ---------- OLD CODE -----------
+# === Copy config to server ===
 
+@task
+def cp(local_path):
+    use_sudo = False
+    if local_path.startswith('conf/'):
+        remote_path = '/etc/' + local_path[5:]
+        use_sudo = True
+    else:
+        return None
+
+    # env.hosts = [vars['host']]
+    env.host_string = vars['host']
+    print(env.hosts)
+
+    info("Copy '{local_path}' to '{remote_path}' on server", local_path=local_path, remote_path=remote_path)
+    put(local_path, remote_path, use_sudo=use_sudo)
+
+
+### OLD OLD OLD ###
 # --- project ---
 def project_init():
     project_name = prompt('Project name: ')
